@@ -1,0 +1,119 @@
+name: "IaC: Onboard"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to create and configure (e.g. dev, qa, prod)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      cf_api_token:
+        description: 'Cloudflare API Token for this client. Only needed if this environment has a "platform: cloudflare" application. Leave blank to use the pre-stored CF_API_TOKEN repository secret.'
+        required: false
+        type: string
+      config_file:
+        description: 'Path to the IAC config JSON file in this repo'
+        required: false
+        default: '.github/iac-config.json'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  onboard:
+    name: Provision Environment, Variables, and Secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout client repo
+        uses: actions/checkout@v6
+
+      - name: Generate token for IaC repo (read)
+        uses: actions/create-github-app-token@v3
+        id: iac-token
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: valoriz
+          repositories: streakjs-common-infra
+
+      - name: Generate token for client repo (write)
+        uses: actions/create-github-app-token@v3
+        id: client-token
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout IaC repo
+        uses: actions/checkout@v6
+        with:
+          repository: valoriz/streakjs-common-infra
+          ref: main
+          token: ${{ steps.iac-token.outputs.token }}
+          path: infra
+
+      # Shared with iac-cf-create.yml/iac-cf-destroy.yml so the config is parsed/validated
+      # identically everywhere. Mainly used here for early validation — most of its output
+      # (CF_WORKERS, CF_ACCOUNT_ID, etc.) isn't written as a GitHub variable anymore; only the
+      # Cloudflare token and worker secrets actually get persisted, below.
+      - name: Read IAC config file
+        id: config
+        env:
+          ENV_NAME: ${{ github.event.inputs.environment }}
+          CONFIG_FILE: ${{ github.event.inputs.config_file }}
+        run: |
+          chmod +x infra/iac/cloudflare/scripts/read-iac-config.sh
+          infra/iac/cloudflare/scripts/read-iac-config.sh
+
+      # Only required if this environment has a 'platform: cloudflare' application (HAS_CLOUDFLARE_APP,
+      # set by "Read IAC config file" above) — an all-Netlify/all-AWS environment never needs a
+      # Cloudflare token at all, and isn't asked for one.
+      #
+      # CF_API_TOKEN_FROM_INPUT tracks whether the token actually came from the dispatch UI this run,
+      # as opposed to the pre-stored repository secret fallback — onboard-client.sh only writes an
+      # environment-scoped CF_API_TOKEN secret when it's true, so a plain re-run never silently copies
+      # the repo-level secret down into every environment. The repo-level secret still works as the
+      # fallback at apply time: iac-cf-create.yml/iac-cf-destroy.yml read secrets.CF_API_TOKEN scoped to
+      # the environment, and GitHub falls back to the repository secret when no environment one exists.
+      - name: Resolve Cloudflare token
+        env:
+          INPUT_CF_API_TOKEN:  ${{ github.event.inputs.cf_api_token }}
+          SECRET_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          if [[ "$HAS_CLOUDFLARE_APP" != "true" ]]; then
+            echo "CF_API_TOKEN_RESOLVED=" >> "$GITHUB_ENV"
+            echo "CF_API_TOKEN_FROM_INPUT=false" >> "$GITHUB_ENV"
+            echo "ℹ️  No 'platform: cloudflare' application in this environment — skipping Cloudflare token"
+          elif [[ -n "$INPUT_CF_API_TOKEN" ]]; then
+            echo "CF_API_TOKEN_RESOLVED=$INPUT_CF_API_TOKEN" >> "$GITHUB_ENV"
+            echo "CF_API_TOKEN_FROM_INPUT=true" >> "$GITHUB_ENV"
+          elif [[ -n "$SECRET_CF_API_TOKEN" ]]; then
+            echo "CF_API_TOKEN_RESOLVED=$SECRET_CF_API_TOKEN" >> "$GITHUB_ENV"
+            echo "CF_API_TOKEN_FROM_INPUT=false" >> "$GITHUB_ENV"
+            echo "ℹ️  Using the pre-stored CF_API_TOKEN repository secret — not writing an environment-scoped copy"
+          else
+            echo "❌ cf_api_token is required: provide it as a dispatch input or pre-store it as the CF_API_TOKEN repository secret"
+            exit 1
+          fi
+
+      - name: Run onboarding script
+        env:
+          GH_TOKEN: ${{ steps.client-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          ENV_NAME: ${{ github.event.inputs.environment }}
+          CF_API_TOKEN: ${{ env.CF_API_TOKEN_RESOLVED }}
+          CF_API_TOKEN_FROM_INPUT: ${{ env.CF_API_TOKEN_FROM_INPUT }}
+          # Worker secrets (WORKER_SECRETS) are NOT handled by onboarding at all — developers set
+          # that one GitHub secret directly (`gh secret set WORKER_SECRETS --env <env> --body
+          # '{...}'`) whenever they need to add/rotate a worker secret, with no onboarding re-run
+          # required. See iac-cf-create.yml/iac-cf-destroy.yml "Read worker secrets".
+          # All remaining vars (including EXTRA_VARIABLES) are populated from the config file via GITHUB_ENV
+        run: |
+          chmod +x infra/iac/cloudflare/scripts/onboard-client.sh
+          infra/iac/cloudflare/scripts/onboard-client.sh

@@ -1,0 +1,9 @@
+{
+  "name": "kenzopsify-app",
+  "version": "1.0.0",
+  "description": "Static application served by Cloudflare Workers & R2 for kenzopsify.site",
+  "scripts": {
+    "build": "mkdir -p dist && cp src/index.html src/style.css src/script.js dist/ && echo 'Build complete!'",
+    "clean": "rm -rf dist"
+  }
+}

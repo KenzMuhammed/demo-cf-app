@@ -1,0 +1,68 @@
+{
+  "_comment": "Infrastructure configuration for project kenzopsify.site",
+  "project_name": "kenzopsify",
+  "cloudflare": {
+    "account_id": "067f0f972e0d0cd55a2ccca3f1f04dd9",
+    "r2_bucket_location": "apac",
+    "worker_compatibility_date": "2026-07-09",
+    "security_contact": "mailto:security@kenzopsify.site",
+    "dmarc_policy": "quarantine",
+    "dmarc_rua": "dmarc@kenzopsify.site"
+  },
+  "extra_variables": {
+    "API_VERSION": "v1"
+  },
+  "extra_secret_vars": [],
+  "environments": {
+    "dev": {
+      "cloudflare": {
+        "manage_zone_resources": "false"
+      },
+      "applications": [
+        {
+          "type": "worker",
+          "platform": "cloudflare",
+          "name": "web-gateway",
+          "worker_name": "web-kenzopsify-gateway-dev",
+          "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
+          "r2_bucket_name": "web-kenzopsify-deployments-dev-001",
+          "secret_vars": [],
+          "env_vars": {},
+          "worker_custom_domains": [
+            {
+              "hostname": "dev.kenzopsify.site",
+              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+            }
+          ]
+        }
+      ]
+    },
+    "prod": {
+      "cloudflare": {
+        "manage_zone_resources": "true"
+      },
+      "applications": [
+        {
+          "type": "worker",
+          "platform": "cloudflare",
+          "name": "web-gateway",
+          "worker_name": "web-kenzopsify-gateway-prod",
+          "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
+          "r2_bucket_name": "web-kenzopsify-deployments-prod-001",
+          "secret_vars": [],
+          "env_vars": {},
+          "worker_custom_domains": [
+            {
+              "hostname": "kenzopsify.site",
+              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+            },
+            {
+              "hostname": "www.kenzopsify.site",
+              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

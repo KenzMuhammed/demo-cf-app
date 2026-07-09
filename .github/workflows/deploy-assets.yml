@@ -1,0 +1,59 @@
+name: "App: Deploy Assets to R2"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to deploy assets'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-assets:
+    name: Build and Upload Assets
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies & Build
+        run: |
+          cd app
+          npm install
+          npm run build
+
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          aws configure set default.region auto
+
+      - name: Sync assets to Cloudflare R2
+        env:
+          ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+          ENV_NAME: ${{ github.event.inputs.environment }}
+        run: |
+          # Resolve bucket name matching iac-config.json
+          BUCKET_NAME="web-kenzopsify-deployments-${ENV_NAME}-001"
+          ENDPOINT_URL="https://${ACCOUNT_ID}.r2.cloudflarestorage.com"
+          
+          echo " Uploading app/dist/ to R2 bucket: s3://${BUCKET_NAME} via endpoint: ${ENDPOINT_URL}"
+          
+          aws s3 sync app/dist/ s3://${BUCKET_NAME} \
+            --endpoint-url ${ENDPOINT_URL} \
+            --delete
+          
+          echo "✅ Asset sync complete!"

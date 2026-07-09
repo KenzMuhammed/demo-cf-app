@@ -1,0 +1,64 @@
+name: "IaC: Offboard"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to offboard (e.g. dev, qa, prod)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+      delete_environment:
+        description: 'Also delete the GitHub Environment itself'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  offboard:
+    name: Remove Environment Variables and Secrets
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Generate token for IaC repo (read)
+        uses: actions/create-github-app-token@v3
+        id: iac-token
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: valoriz
+          repositories: streakjs-common-infra
+
+      - name: Generate token for client repo (write)
+        uses: actions/create-github-app-token@v3
+        id: client-token
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout IaC repo
+        uses: actions/checkout@v6
+        with:
+          repository: valoriz/streakjs-common-infra
+          ref: main
+          token: ${{ steps.iac-token.outputs.token }}
+          path: infra
+
+      - name: Run offboarding script
+        env:
+          GH_TOKEN: ${{ steps.client-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          ENV_NAME: ${{ github.event.inputs.environment }}
+          DELETE_ENV: ${{ github.event.inputs.delete_environment }}
+        run: |
+          chmod +x infra/iac/cloudflare/scripts/offboard-client.sh
+          infra/iac/cloudflare/scripts/offboard-client.sh
