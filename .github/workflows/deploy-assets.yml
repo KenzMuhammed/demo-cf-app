@@ -41,9 +41,15 @@ jobs:
           aws configure set aws_secret_access_key ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
           aws configure set default.region auto
 
+      - name: Extract Cloudflare Account ID
+        id: config
+        run: |
+          ACCOUNT_ID=$(python3 -c "import json; print(json.load(open('.github/iac-config.json'))['cloudflare']['account_id'])")
+          echo "account_id=${ACCOUNT_ID}" >> $GITHUB_OUTPUT
+
       - name: Sync assets to Cloudflare R2
         env:
-          ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+          ACCOUNT_ID: ${{ steps.config.outputs.account_id }}
           ENV_NAME: ${{ github.event.inputs.environment }}
         run: |
           # Resolve bucket name matching iac-config.json
