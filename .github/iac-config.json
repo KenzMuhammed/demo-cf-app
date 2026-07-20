@@ -53,10 +53,6 @@
           "env_vars": {},
           "worker_custom_domains": [
             {
-              "hostname": "test-only-for-fix.kenzopsify.site",
-              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
-            },
-            {
               "hostname": "www.test-only-for-fix.kenzopsify.site",
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             }
