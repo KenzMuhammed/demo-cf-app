@@ -16,7 +16,7 @@
   "environments": {
     "dev": {
       "cloudflare": {
-        "manage_zone_resources": "true"
+        "manage_zone_resources": "false"
       },
       "applications": [
         {
@@ -34,12 +34,39 @@
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             }
           ]
+        }
+      ]
+    },
+    "prod": {
+      "cloudflare": {
+        "manage_zone_resources": "true"
+      },
+      "applications": [
+        {
+          "type": "worker",
+          "platform": "cloudflare",
+          "name": "web-gateway",
+          "worker_name": "web-kenzopsify-gateway-prod",
+          "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
+          "r2_bucket_name": "web-kenzopsify-deployments-prod-001",
+          "secret_vars": [],
+          "env_vars": {},
+          "worker_custom_domains": [
+            {
+              "hostname": "test-cf-gateway.kenzopsify.site",
+              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+            },
+            {
+              "hostname": "www.test-cf-gateway.kenzopsify.site",
+              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+            }
+          ]
         },
         {
           "type": "worker",
           "platform": "cloudflare",
           "name": "email-corker",
-          "worker_name": "email-kenzopsify-corker-dev",
+          "worker_name": "email-kenzopsify-corker-prod",
           "worker_script_path": "iac/cloudflare/scripts/email-googleapps-cf-worker.js",
           "secret_vars": ["GOOGLE_SCRIPT_URL", "EMAIL_API_KEY"],
           "env_vars": {},
