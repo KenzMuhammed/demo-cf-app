@@ -53,11 +53,11 @@
           "env_vars": {},
           "worker_custom_domains": [
             {
-              "hostname": "test-cf-gateway.kenzopsify.site",
+              "hostname": "test-only-for-fix.kenzopsify.site",
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             },
             {
-              "hostname": "www.test-cf-gateway.kenzopsify.site",
+              "hostname": "www.test-only-for-fix.kenzopsify.site",
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             }
           ]
@@ -72,7 +72,7 @@
           "env_vars": {},
           "worker_custom_domains": [
             {
-              "hostname": "email-dev.kenzopsify.site",
+              "hostname": "email-test-only-for-fix.kenzopsify.site",
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             }
           ]
