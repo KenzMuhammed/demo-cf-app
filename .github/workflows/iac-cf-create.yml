@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: valoriz/streakjs-common-infra
-          ref: main
+          ref: kenz/feature/terraform-issue-resolution
           token: ${{ steps.iac-token.outputs.token }}
           path: infra
 
