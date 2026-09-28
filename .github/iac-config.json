@@ -10,10 +10,7 @@
     "dmarc_rua": ""
   },
   "extra_variables": {},
-  "extra_secret_vars": [
-    "CF_R2_ACCESS_KEY_ID",
-    "CF_R2_SECRET_ACCESS_KEY"
-  ],
+  "extra_secret_vars": [],
   "environments": {
     "qa": {
       "cloudflare": {
@@ -25,6 +22,10 @@
         "CF_PAGES_WEB_CMS_NAME": "cms-innovationrentals-sanity-qa",
         "CF_PAGES_PROD_BRANCH": "main"
       },
+      "extra_secret_vars": [
+        "CF_R2_ACCESS_KEY_ID",
+        "CF_R2_SECRET_ACCESS_KEY"
+      ],
       "applications": [
         {
           "type": "r2",
