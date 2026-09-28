@@ -1,0 +1,76 @@
+name: "CD: Web Deploy to R2"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - qa
+          - prod
+
+jobs:
+  deploy:
+    name: Build & Deploy Web
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Resolve Environment Variables
+        working-directory: ${{ github.workspace }}
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          CONFIG_FILE=".github/iac-config.json"
+          
+          VAL_CF_ACCOUNT_ID="${{ vars.CF_ACCOUNT_ID }}"
+          if [ -z "$VAL_CF_ACCOUNT_ID" ]; then
+            VAL_CF_ACCOUNT_ID=$(jq -r --arg env "$ENV" '.environments[$env].cloudflare.account_id // .cloudflare.account_id // empty' $CONFIG_FILE)
+          fi
+          
+          # Find the R2 bucket configured for web deployments
+          VAL_R2_BUCKET_NAME=$(jq -r --arg env "$ENV" '.environments[$env].applications[] | select(.type == "r2" and (.name | contains("deployments"))) | .r2_bucket_name' $CONFIG_FILE | head -n 1)
+          
+          echo "CF_ACCOUNT_ID=$VAL_CF_ACCOUNT_ID" >> "$GITHUB_ENV"
+          echo "R2_BUCKET_NAME=$VAL_R2_BUCKET_NAME" >> "$GITHUB_ENV"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 12.6.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Project
+        run: pnpm run build
+
+      - name: Print Deployment Info
+        run: |
+          echo "Deploying to R2 Bucket: ${{ env.R2_BUCKET_NAME }}"
+          echo "Account ID: ${{ env.CF_ACCOUNT_ID }}"
+
+      - name: Deploy to Cloudflare R2 via S3
+        run: |
+          aws s3 sync dist/ s3://${{ env.R2_BUCKET_NAME }}/ \
+            --endpoint-url https://${{ env.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com \
+            --region auto \
+            --delete
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}

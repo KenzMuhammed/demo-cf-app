@@ -1,39 +1,63 @@
 {
-  "_comment": "Infrastructure configuration for project kenzopsify.site",
-  "project_name": "kenzopsify",
+  "_comment": "Shared values are defaults for all environments. Any field can be overridden per-environment inside environments.<env>, including nested objects like 'cloudflare' (deep-merged key by key). The 'cloudflare' block holds Cloudflare-specific account/zone settings and is only required if at least one application in that environment has \"platform\": \"cloudflare\" — omit it entirely for environments that don't use Cloudflare. extra_variables and extra_secret_vars also use root-vs-per-env placement to decide GitHub scope: a key/name only declared at the top level becomes a repository-level GitHub variable/secret (created once, shared by every environment via GitHub's automatic fallback); declared under environments.<env> instead, it becomes environment-scoped for that environment, overriding the repo-level one. extra_variables holds real values (set automatically during onboarding); extra_secret_vars holds only secret NAMES — onboarding creates a placeholder secret per name, then fill in the real value in GitHub. Don't list an already-existing secret name (e.g. CF_API_TOKEN) in extra_secret_vars — just reference it directly in that pipeline's workflow YAML instead. Secrets cannot be stored here; pass them at dispatch time.",
+  "project_name": "kenz-innovationrentals",
   "cloudflare": {
     "account_id": "067f0f972e0d0cd55a2ccca3f1f04dd9",
     "r2_bucket_location": "apac",
-    "worker_compatibility_date": "2026-07-09",
-    "security_contact": "mailto:security@kenzopsify.site",
-    "dmarc_policy": "quarantine",
-    "dmarc_rua": "dmarc@kenzopsify.site"
+    "worker_compatibility_date": "2026-09-01",
+    "security_contact": "mailto:kenzmazin67@gmail.com",
+    "dmarc_policy": "reject",
+    "dmarc_rua": ""
   },
-  "extra_variables": {
-    "API_VERSION": "v1"
-  },
-  "extra_secret_vars": [],
+  "extra_variables": {},
+  "extra_secret_vars": [
+    "CF_R2_ACCESS_KEY_ID",
+    "CF_R2_SECRET_ACCESS_KEY"
+  ],
   "environments": {
-    "dev": {
+    "qa": {
       "cloudflare": {
         "manage_zone_resources": "false"
       },
+      "extra_variables": {
+        "SANITY_PROJECT_ID": "undt1e7f",
+        "SANITY_DATA_SET": "qa",
+        "CF_PAGES_WEB_CMS_NAME": "cms-innovationrentals-sanity-qa",
+        "CF_PAGES_PROD_BRANCH": "main"
+      },
       "applications": [
+        {
+          "type": "r2",
+          "platform": "cloudflare",
+          "name": "web-innovationrentals-deployments",
+          "r2_bucket_name": "web-innovationrentals-deployments-qa-001"
+        },
         {
           "type": "worker",
           "platform": "cloudflare",
-          "name": "web-gateway",
-          "worker_name": "web-kenzopsify-gateway-dev",
+          "name": "web-innovationrentals",
+          "worker_name": "web-innovationrentals-worker-qa-001",
           "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
-          "r2_bucket_name": "web-kenzopsify-deployments-dev-001",
+          "r2_bucket_name": "web-innovationrentals-deployments-qa-001",
           "secret_vars": [],
           "env_vars": {},
           "worker_custom_domains": [
             {
-              "hostname": "dev.kenzopsify.site",
+              "hostname": "qa-innovation-rentals.kenzopsify.site",
               "zone_id": "077ff6432980f6758e76a1f54047e2e1"
             }
           ]
+        },
+        {
+          "type": "pages",
+          "platform": "cloudflare",
+          "name": "cms-sanity",
+          "pages_name": "cms-innovationrentals-sanity-qa",
+          "pages_prod_branch": "main",
+          "pages_custom_domain": {
+            "hostname": "cms-innovationrentals-qa.kenzopsify.site",
+            "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+          }
         }
       ]
     },
@@ -43,33 +67,73 @@
       },
       "applications": [
         {
+          "type": "r2",
+          "platform": "cloudflare",
+          "name": "web-streakjs-deployments",
+          "r2_bucket_name": "web-<website-name>-streakjs-deployments-001"
+        },
+        {
           "type": "worker",
           "platform": "cloudflare",
-          "name": "web-gateway",
-          "worker_name": "web-kenzopsify-gateway-prod",
+          "name": "web-streakjs",
+          "worker_name": "web-<website-name>-streakjs-001",
           "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
-          "r2_bucket_name": "web-kenzopsify-deployments-prod-001",
+          "r2_bucket_name": "web-<website-name>-streakjs-deployments-001",
           "secret_vars": [],
           "env_vars": {},
           "worker_custom_domains": [
             {
-              "hostname": "www.test-only-for-fix.kenzopsify.site",
-              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+              "hostname": "www.<website-name>.com",
+              "zone_id": "<prod-zone-id>"
+            }
+          ]
+        },
+        {
+          "type": "pages",
+          "platform": "cloudflare",
+          "name": "cms-sanity",
+          "pages_name": "cms-<website-name>-sanity",
+          "pages_prod_branch": "<git-branch>",
+          "pages_custom_domain": {
+            "hostname": "cms.<website-name>.com",
+            "zone_id": "<prod-zone-id>"
+          }
+        },
+        {
+          "type": "worker",
+          "platform": "cloudflare",
+          "name": "email-googleapps",
+          "worker_name": "email-common-google-001",
+          "worker_script_path": "iac/cloudflare/scripts/email-googleapps-cf-worker.js",
+          "secret_vars": [
+            "GOOGLE_SCRIPT_URL",
+            "EMAIL_API_KEY"
+          ],
+          "env_vars": {},
+          "worker_custom_domains": [
+            {
+              "hostname": "email.<website-name>.com",
+              "zone_id": "<prod-zone-id>"
             }
           ]
         },
         {
           "type": "worker",
           "platform": "cloudflare",
-          "name": "email-corker",
-          "worker_name": "email-kenzopsify-corker-prod",
-          "worker_script_path": "iac/cloudflare/scripts/email-googleapps-cf-worker.js",
-          "secret_vars": ["GOOGLE_SCRIPT_URL", "EMAIL_API_KEY"],
-          "env_vars": {},
+          "name": "email-resend",
+          "worker_name": "email-common-resend-001",
+          "worker_script_path": "iac/cloudflare/scripts/email-resend-cf-worker.js",
+          "secret_vars": [
+            "RESEND_API_KEY",
+            "EMAIL_API_KEY"
+          ],
+          "env_vars": {
+            "RESEND_FROM_ADDRESS": "no-reply@<website-name>.com"
+          },
           "worker_custom_domains": [
             {
-              "hostname": "email-test-only-for-fix.kenzopsify.site",
-              "zone_id": "077ff6432980f6758e76a1f54047e2e1"
+              "hostname": "email-resend.<website-name>.com",
+              "zone_id": "<prod-zone-id>"
             }
           ]
         }
