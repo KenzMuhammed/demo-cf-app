@@ -1,0 +1,144 @@
+@config "../tailwind.config.ts";
+@import "tailwindcss";
+
+:root {
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Rajdhani", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-body);
+  --topbar-height: 44px;
+  --header-height: 90px;
+  --navbar-height: 80px;
+}
+
+body {
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+}
+
+.topbar-height {
+  height: var(--topbar-height);
+}
+
+.header-height {
+  height: var(--header-height);
+}
+
+.navbar-height {
+  height: var(--navbar-height);
+}
+
+a,
+button {
+  cursor: pointer;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.topbar-clip {
+  clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%);
+}
+
+@utility text-shadow-sm {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+@utility text-shadow {
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+@utility text-shadow-lg {
+  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+.slope-brand {
+  clip-path: polygon(0 0, 100% 0, 85% 100%, 0% 100%);
+}
+
+.slope {
+  clip-path: polygon(90% 0, 100% 35%, 100% 100%, 0 100%, 0 0);
+}
+
+.slope-lg {
+  clip-path: polygon(85% 0, 100% 25%, 100% 100%, 0 100%, 0 0);
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --header-height: 64px;
+    --topbar-height: 40px;
+  }
+
+  .slope-lg {
+    clip-path: polygon(80% 0, 100% 20%, 100% 100%, 0 100%, 0 0);
+  }
+}
+
+@keyframes slowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+.animate-slowSpin {
+  animation: slowSpin 40s linear infinite;
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.clip-tab {
+  clip-path: polygon(0% 0%, 94% 0%, 100% 100%, 0% 100%);
+}
+
+@keyframes toast-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.editor-content p {
+  @apply mt-6 mb-4;
+}
+.editor-content p:first-child {
+  @apply mt-0;
+}
+.editor-content p > strong {
+  @apply font-semibold text-gray-900;
+}
+.editor-content > ul {
+  @apply mb-6 ml-6 list-disc space-y-2;
+}
+.editor-content ul ul {
+  @apply mt-2 mb-0 ml-6 list-[circle] space-y-1;
+}
+.editor-content li > strong {
+  @apply font-semibold text-gray-900;
+}
