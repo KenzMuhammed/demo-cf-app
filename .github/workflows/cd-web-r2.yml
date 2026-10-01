@@ -1,76 +1,169 @@
-name: "CD: Web Deploy to R2"
+name: "CD: React Release"
 
+# Manual deployment workflow for building and deploying to R2.
+# Assumes PR branch protection handles linting and type-checking.
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment'
+        description: "Target environment"
         required: true
         type: choice
         options:
           - qa
           - prod
+      release_tag:
+        description: "Release Tag (Eg: PROD-Release-v1.0.0, QA-Release-v1.0.0). Created on successful deploy."
+        required: false
+        type: string
+
+permissions:
+  contents: write # Needed to create and push git tags
+
+concurrency:
+  group: web-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
     name: Build & Deploy Web
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
-    
+
     defaults:
       run:
         working-directory: web
 
+    env:
+      TARGET_ENV: ${{ github.event.inputs.environment }}
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Resolve Environment Variables
-        working-directory: ${{ github.workspace }}
-        run: |
-          ENV="${{ github.event.inputs.environment }}"
-          CONFIG_FILE=".github/iac-config.json"
-          
-          VAL_CF_ACCOUNT_ID="${{ vars.CF_ACCOUNT_ID }}"
-          if [ -z "$VAL_CF_ACCOUNT_ID" ]; then
-            VAL_CF_ACCOUNT_ID=$(jq -r --arg env "$ENV" '.environments[$env].cloudflare.account_id // .cloudflare.account_id // empty' $CONFIG_FILE)
-          fi
-          
-          # Find the R2 bucket configured for web deployments
-          VAL_R2_BUCKET_NAME=$(jq -r --arg env "$ENV" '.environments[$env].applications[] | select(.type == "r2" and (.name | contains("deployments"))) | .r2_bucket_name' $CONFIG_FILE | head -n 1)
-          
-          echo "CF_ACCOUNT_ID=$VAL_CF_ACCOUNT_ID" >> "$GITHUB_ENV"
-          echo "R2_BUCKET_NAME=$VAL_R2_BUCKET_NAME" >> "$GITHUB_ENV"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 12.6.0
+          version: 12
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: 'pnpm'
+          node-version: "24"
+          cache: "pnpm"
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build Project
-        run: pnpm run build
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          VITE_SANITY_PROJECT_ID: ${{ vars.SANITY_PROJECT_ID }}
+          VITE_SANITY_DATASET: ${{ vars.SANITY_DATA_SET }}
 
-      - name: Print Deployment Info
+      # ---------------------------------------------------------------------------
+      # Deployment Configuration & Sync
+      # ---------------------------------------------------------------------------
+      - name: Read deployment config from iac-config.json
+        working-directory: ${{ github.workspace }}
         run: |
-          echo "Deploying to R2 Bucket: ${{ env.R2_BUCKET_NAME }}"
-          echo "Account ID: ${{ env.CF_ACCOUNT_ID }}"
+          ENV="${TARGET_ENV}"
 
-      - name: Deploy to Cloudflare R2 via S3
-        run: |
-          aws s3 sync dist/ s3://${{ env.R2_BUCKET_NAME }}/ \
-            --endpoint-url https://${{ env.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com \
-            --region auto \
-            --delete
+          R2_BUCKET=$(jq -r \
+            --arg env "$ENV" \
+            '.environments[$env].applications[]
+              | select(.type == "r2" and (.name | contains("deployments")))
+              | .r2_bucket_name' \
+            .github/iac-config.json | head -n 1)
+
+          if [[ -z "$R2_BUCKET" || "$R2_BUCKET" == "null" ]]; then
+            echo "❌ Could not find r2_bucket_name for environment '$ENV' in .github/iac-config.json"
+            exit 1
+          fi
+
+          CF_ACCOUNT_ID=$(jq -r \
+            --arg env "$ENV" \
+            '.environments[$env].cloudflare.account_id // .cloudflare.account_id' \
+            .github/iac-config.json)
+
+          if [[ -z "$CF_ACCOUNT_ID" || "$CF_ACCOUNT_ID" == "null" ]]; then
+            echo "❌ Could not find cloudflare.account_id for environment '$ENV' in .github/iac-config.json"
+            exit 1
+          fi
+
+          CF_ZONE_ID=$(jq -r \
+            --arg env "$ENV" \
+            '.environments[$env].applications[]
+              | select(.type == "worker" and (.name | contains("web")))
+              | .worker_custom_domains[0].zone_id' \
+            .github/iac-config.json | head -n 1)
+
+          echo "R2_BUCKET=$R2_BUCKET" >> "$GITHUB_ENV"
+          echo "CF_ACCOUNT_ID=$CF_ACCOUNT_ID" >> "$GITHUB_ENV"
+          echo "CF_ZONE_ID=$CF_ZONE_ID" >> "$GITHUB_ENV"
+          echo "✅ R2 bucket : $R2_BUCKET"
+          echo "✅ Account ID: $CF_ACCOUNT_ID"
+          echo "✅ Zone ID   : ${CF_ZONE_ID:-<not set — cache purge will be skipped>}"
+
+      - name: Sync dist/ to R2
+        working-directory: ${{ github.workspace }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 sync web/dist/ "s3://${R2_BUCKET}/" \
+            --endpoint-url "https://${CF_ACCOUNT_ID}.r2.cloudflarestorage.com" \
+            --delete \
+            --no-progress
+
+          echo "✅ Sync complete"
+
+      - name: Purge Cloudflare CDN cache
+        working-directory: ${{ github.workspace }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          if [[ -z "$CF_ZONE_ID" || "$CF_ZONE_ID" == "null" ]]; then
+            echo "⚠️  No zone_id found for environment '${TARGET_ENV}' — skipping cache purge"
+            exit 0
+          fi
+
+          echo "Purging CDN cache for zone ${CF_ZONE_ID} …"
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [[ "$SUCCESS" != "true" ]]; then
+            echo "❌ Cache purge failed: $(echo "$RESPONSE" | jq -r '.errors')"
+            exit 1
+          fi
+
+          echo "✅ Cache purged successfully"
+
+      - name: Create and Push Git Tag
+        working-directory: ${{ github.workspace }}
+        if: github.event.inputs.release_tag != ''
+        env:
+          TAG: ${{ github.event.inputs.release_tag }}
+          ENV: ${{ github.event.inputs.environment }}
+        run: |
+          echo "🏷️ Creating Git tag: $TAG"
+          
+          # Configure git so the GitHub Actions bot can commit the tag
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create an annotated tag
+          git tag -a "$TAG" -m "Release $TAG deployed to $ENV"
+          
+          # Push the tag to the repository
+          git push origin "$TAG"
+          
+          echo "✅ Tag $TAG successfully pushed to repository."
