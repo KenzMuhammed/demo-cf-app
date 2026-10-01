@@ -24,7 +24,8 @@
       },
       "extra_secret_vars": [
         "CF_R2_ACCESS_KEY_ID",
-        "CF_R2_SECRET_ACCESS_KEY"
+        "CF_R2_SECRET_ACCESS_KEY",
+        "CF_PURGE_TOKEN"
       ],
       "applications": [
         {
@@ -38,7 +39,7 @@
           "platform": "cloudflare",
           "name": "web-innovationrentals",
           "worker_name": "web-innovationrentals-worker-qa-001",
-          "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
+          "worker_script_path": ".github/web-streakjs-cf-worker.js",
           "r2_bucket_name": "web-innovationrentals-deployments-qa-001",
           "secret_vars": [],
           "env_vars": {},
@@ -66,6 +67,9 @@
       "cloudflare": {
         "manage_zone_resources": "true"
       },
+      "extra_secret_vars": [
+        "CF_PURGE_TOKEN"
+      ],
       "applications": [
         {
           "type": "r2",
@@ -78,7 +82,7 @@
           "platform": "cloudflare",
           "name": "web-streakjs",
           "worker_name": "web-<website-name>-streakjs-001",
-          "worker_script_path": "iac/cloudflare/scripts/web-streakjs-cf-worker.js",
+          "worker_script_path": ".github/web-streakjs-cf-worker.js",
           "r2_bucket_name": "web-<website-name>-streakjs-deployments-001",
           "secret_vars": [],
           "env_vars": {},
